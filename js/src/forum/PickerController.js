@@ -19,10 +19,6 @@ const t = 'pianotell-flamoji.forum.';
 // frame and is immediately replaced by the real picker.
 const LOADER_DELAY_MS = 120;
 
-// One-time global patch to webpack's chunk-URL builder, appending the
-// forum.js revision hash as a cache-buster so lazy chunks bust the browser
-// cache after upgrades. Shared across every controller instance.
-let webpackVersioned = false;
 
 /**
  * Owns the emoji-mart picker lifecycle for a single Flarum composer: lazy
@@ -68,9 +64,6 @@ export default class PickerController {
     this._loaderReposition = null;
     this._loaderTimer = null;
 
-    // Point __webpack_public_path__ at our extension's published assets so
-    // webpack knows where to fetch lazy chunks (emoji-mart.js, etc).
-    this._setWebpackPublicPath();
   }
 
   /** The toolbar button element (positioning anchor + focus target). */
@@ -84,10 +77,6 @@ export default class PickerController {
     return !!(btn && btn.isConnected);
   }
 
-  _setWebpackPublicPath() {
-    const baseUrl = (app.forum.attribute('baseUrl') || '').replace(/\/+$/, '');
-    __webpack_public_path__ = baseUrl + '/assets/extensions/pianotell-flamoji/dist/';
-  }
 
   // ---------------------------------------------------------------------
   // Positioning
@@ -232,27 +221,9 @@ export default class PickerController {
     m.redraw();
     this.scheduleLoaderMount();
 
-    // Re-assert the public path and patch chunk URLs to bust cache after
-    // upgrades, then kick off the load.
-    this._setWebpackPublicPath();
-    this._patchWebpackVersion();
     this._loadAndBuild();
   }
 
-  _patchWebpackVersion() {
-    if (webpackVersioned) return;
-    const scripts = document.querySelectorAll('script[src*="forum.js"]');
-    for (const s of scripts) {
-      const match = s.src.match(/[?&]v=([a-f0-9]+)/);
-      if (match) {
-        const ver = match[1];
-        const origU = __webpack_require__.u;
-        __webpack_require__.u = (id) => origU(id) + '?v=' + ver;
-        break;
-      }
-    }
-    webpackVersioned = true;
-  }
 
   _loadAndBuild() {
     const useCdn = app.forum.attribute('flamoji.use_cdn');

@@ -22,11 +22,11 @@ use Flarum\Extension\ExtensionManager;
 return [
     (new Extend\Frontend('forum'))
         ->css(__DIR__.'/less/forum.less')
-        ->js(__DIR__.'/assets/dist/forum.js'),
+        ->jsDirectory(__DIR__.'/js/dist'),
 
     (new Extend\Frontend('admin'))
         ->css(__DIR__.'/less/admin.less')
-        ->js(__DIR__.'/assets/dist/admin.js'),
+        ->jsDirectory(__DIR__.'/js/dist'),
 
     new Extend\Locales(__DIR__.'/locale'),
 
