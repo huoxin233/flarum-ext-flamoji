@@ -20,6 +20,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Validation\Factory;
 use Laminas\Diactoros\Response\JsonResponse;
 use PianoTell\Flamoji\Models\Emoji;
+use Symfony\Contracts\Translation\TranslatorInterface;
 use Tobyz\JsonApiServer\Context as BaseContext;
 
 /**
@@ -28,7 +29,9 @@ use Tobyz\JsonApiServer\Context as BaseContext;
 class EmojiResource extends AbstractDatabaseResource
 {
     public function __construct(
-        protected ConnectionInterface $db
+        protected ConnectionInterface $db,
+        protected TranslatorInterface $translator,
+        protected Factory $validatorFactory
     ) {
     }
 
@@ -142,7 +145,9 @@ class EmojiResource extends AbstractDatabaseResource
                 ->where('id', '!=', $model->id ?? 0)
                 ->first();
             if ($existing) {
-                throw new ValidationException(['text_to_replace' => 'This shortcode is already used by another emoji.']);
+                throw new ValidationException([
+                    'text_to_replace' => $this->translator->trans('pianotell-flamoji.api.duplicate_shortcode_database')
+                ]);
             }
             
             $model->text_to_replace = $value;
@@ -172,7 +177,7 @@ class EmojiResource extends AbstractDatabaseResource
             return $row;
         }, $data);
 
-        $validator = resolve(Factory::class)->make(['data' => $data], [
+        $validator = $this->validatorFactory->make(['data' => $data], [
             'data' => 'required|array',
             'data.*' => 'required|array',
             'data.*.title' => 'nullable|string',
@@ -186,9 +191,9 @@ class EmojiResource extends AbstractDatabaseResource
             'data.*.path' => 'required|string|filled',
             'data.*.category' => 'nullable|string|max:255',
         ], [
-            'data.*.text_to_replace.regex' => 'The shortcode must not contain whitespace.',
-            'data.*.text_to_replace.distinct' => 'Duplicate shortcode within import batch.',
-            'data.*.text_to_replace.unique' => 'This shortcode is already used by another emoji.'
+            'data.*.text_to_replace.regex' => $this->translator->trans('pianotell-flamoji.api.invalid_shortcode_whitespace'),
+            'data.*.text_to_replace.distinct' => $this->translator->trans('pianotell-flamoji.api.duplicate_shortcode_batch'),
+            'data.*.text_to_replace.unique' => $this->translator->trans('pianotell-flamoji.api.duplicate_shortcode_database')
         ]);
 
         if ($validator->fails()) {

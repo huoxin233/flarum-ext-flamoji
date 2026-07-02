@@ -143,7 +143,16 @@ pianotell-flamoji:
       flags: Flags
       custom: Custom
 
+  api:
+    invalid_shortcode_whitespace: "The shortcode must not contain whitespace."
+    duplicate_shortcode_batch: "Duplicate shortcode within import batch."
+    duplicate_shortcode_database: "This shortcode is already used by another emoji."
+
   validation:
+    attributes:
+      text_to_replace: "shortcode"
+      path: "image path"
+      category: "category"
     custom:
       text_to_replace:
         regex: "The shortcode must be wrapped in colons and contain only letters, numbers, dashes, underscores or plus signs — e.g. :myemoji_party:."
