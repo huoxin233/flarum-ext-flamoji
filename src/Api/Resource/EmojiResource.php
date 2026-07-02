@@ -17,8 +17,8 @@ use Flarum\Api\Sort\SortColumn;
 use Flarum\Foundation\ValidationException;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Support\Arr;
+use Illuminate\Validation\Factory;
 use Laminas\Diactoros\Response\JsonResponse;
-use PianoTell\Flamoji\Validation\EmojiRules;
 use PianoTell\Flamoji\Models\Emoji;
 use Tobyz\JsonApiServer\Context as BaseContext;
 
@@ -166,58 +166,59 @@ class EmojiResource extends AbstractDatabaseResource
      */
     private function handleImport(array $data): array
     {
-        $errors = [];
-        $normalized = [];
-        $seenTriggers = [];
-        $legacyShortcodes = [];
-
-        // Pre-load existing triggers for duplicate detection
-        $existingTriggers = Emoji::pluck('text_to_replace')->filter()->all();
-
-        foreach ($data as $i => $emojiData) {
-            try {
-                // Import is the backwards-compatibility surface: it validates
-                // only the legacy floor (non-empty, no whitespace, unique),
-                // NOT the canonical shortcode format, so JSON exported by an
-                // older version (or a legacy install) still imports cleanly.
-                $normalized[$i] = EmojiRules::validateCreate(
-                    is_array($emojiData) ? $emojiData : [],
-                    "data.$i."
-                );
-
-                $trigger = $normalized[$i]['text_to_replace'];
-
-                // Check for duplicate within the import batch
-                if (isset($seenTriggers[$trigger])) {
-                    $errors["data.$i.text_to_replace"] = "Duplicate shortcode within import batch (same as row {$seenTriggers[$trigger]}).";
-                }
-                // Check against existing DB entries
-                elseif (in_array($trigger, $existingTriggers, true)) {
-                    $errors["data.$i.text_to_replace"] = 'This shortcode is already used by another emoji.';
-                } else {
-                    $seenTriggers[$trigger] = $i;
-                    // Track non-canonical triggers so the admin gets a
-                    // non-blocking heads-up (the import still succeeds).
-                    if (! EmojiRules::isCanonicalShortcode($trigger)) {
-                        $legacyShortcodes[] = $trigger;
-                    }
-                }
-            } catch (ValidationException $e) {
-                $errors = array_merge($errors, $e->getAttributes());
+        // Legacy JSON might use `textToReplace` instead of `text_to_replace`.
+        $data = array_map(function ($row) {
+            if (is_array($row) && isset($row['textToReplace'])) {
+                $row['text_to_replace'] = $row['textToReplace'];
             }
-        }
+            return $row;
+        }, $data);
 
-        if (! empty($errors)) {
+        $validator = resolve(Factory::class)->make(['data' => $data], [
+            'data' => 'required|array',
+            'data.*' => 'required|array',
+            'data.*.title' => 'nullable|string',
+            'data.*.text_to_replace' => [
+                'required',
+                'string',
+                'regex:/^\S+$/', // No whitespace (legacy floor)
+                'distinct',
+                'unique:custom_emojis,text_to_replace'
+            ],
+            'data.*.path' => 'required|string|filled',
+            'data.*.category' => 'nullable|string|max:255',
+        ], [
+            'data.*.text_to_replace.regex' => 'The shortcode must not contain whitespace.',
+            'data.*.text_to_replace.distinct' => 'Duplicate shortcode within import batch.',
+            'data.*.text_to_replace.unique' => 'This shortcode is already used by another emoji.'
+        ]);
+
+        if ($validator->fails()) {
+            $errors = [];
+            foreach ($validator->errors()->messages() as $key => $messages) {
+                $errors[$key] = $messages[0];
+            }
             throw new ValidationException($errors);
         }
 
-        $this->db->transaction(function () use ($normalized) {
-            foreach ($normalized as $row) {
+        $legacyShortcodes = [];
+
+        $this->db->transaction(function () use ($data, &$legacyShortcodes) {
+            foreach ($data as $row) {
+                $title = trim((string) ($row['title'] ?? ''));
+                $textToReplace = trim((string) ($row['text_to_replace'] ?? ''));
+                $path = trim((string) ($row['path'] ?? ''));
+                $category = trim((string) ($row['category'] ?? ''));
+
+                if (!preg_match('/^:[a-zA-Z0-9_+-]+:$/', $textToReplace)) {
+                    $legacyShortcodes[] = $textToReplace;
+                }
+
                 $emoji = Emoji::build(
-                    $row['title'],
-                    $row['text_to_replace'],
-                    $row['path'],
-                    $row['category'] ?? null
+                    $title,
+                    $textToReplace,
+                    $path,
+                    $category !== '' ? $category : null
                 );
                 $emoji->save();
             }
