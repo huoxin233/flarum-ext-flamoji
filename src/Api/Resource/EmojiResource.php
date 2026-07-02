@@ -99,21 +99,15 @@ class EmojiResource extends AbstractDatabaseResource
             Schema\Str::make('text_to_replace')
                 ->writable()
                 ->requiredOnCreate()
-                ->rules(function (Emoji $emoji) {
-                    return [
-                        'regex:/^:[a-zA-Z0-9_+-]+:$/',
-                        'unique:flamojis,text_to_replace' . ($emoji->exists ? ',' . $emoji->id : ''),
-                    ];
-                })
+                ->rules(['regex:/^:[a-zA-Z0-9_+-]+:$/'], true)
                 ->messages([
-                    'regex' => 'The shortcode must be wrapped in colons and contain only letters, numbers, dashes, underscores or plus signs — e.g. :myemoji_party:.',
-                    'unique' => 'This shortcode is already used by another emoji.'
+                    'regex' => 'The shortcode must be wrapped in colons and contain only letters, numbers, dashes, underscores or plus signs — e.g. :myemoji_party:.'
                 ]),
 
             Schema\Str::make('category')
                 ->writable()
                 ->nullable()
-                ->rules(['max:255'])
+                ->rules(['max:255'], true)
                 ->messages([
                     'max' => 'The category must not be longer than 255 characters.'
                 ]),
@@ -121,7 +115,7 @@ class EmojiResource extends AbstractDatabaseResource
             Schema\Str::make('path')
                 ->writable()
                 ->requiredOnCreate()
-                ->rules(['filled']),
+                ->rules(['filled'], true),
         ];
     }
 
@@ -147,7 +141,17 @@ class EmojiResource extends AbstractDatabaseResource
         }
 
         if ($model->isDirty('text_to_replace')) {
-            $model->text_to_replace = trim((string) $model->text_to_replace);
+            $value = trim((string) $model->text_to_replace);
+            
+            // Check for duplicate trigger text, as Flarum fields don't natively support dynamic ID ignoring
+            $existing = Emoji::where('text_to_replace', $value)
+                ->where('id', '!=', $model->id ?? 0)
+                ->first();
+            if ($existing) {
+                throw new ValidationException(['text_to_replace' => 'This shortcode is already used by another emoji.']);
+            }
+            
+            $model->text_to_replace = $value;
         }
 
         if ($model->isDirty('path')) {
