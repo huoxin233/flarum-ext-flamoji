@@ -98,15 +98,30 @@ class EmojiResource extends AbstractDatabaseResource
 
             Schema\Str::make('text_to_replace')
                 ->writable()
-                ->requiredOnCreate(),
+                ->requiredOnCreate()
+                ->rules(function (Emoji $emoji) {
+                    return [
+                        'regex:/^:[a-zA-Z0-9_+-]+:$/',
+                        'unique:flamojis,text_to_replace' . ($emoji->exists ? ',' . $emoji->id : ''),
+                    ];
+                })
+                ->messages([
+                    'regex' => 'The shortcode must be wrapped in colons and contain only letters, numbers, dashes, underscores or plus signs — e.g. :myemoji_party:.',
+                    'unique' => 'This shortcode is already used by another emoji.'
+                ]),
 
             Schema\Str::make('category')
                 ->writable()
-                ->nullable(),
+                ->nullable()
+                ->rules(['max:255'])
+                ->messages([
+                    'max' => 'The category must not be longer than 255 characters.'
+                ]),
 
             Schema\Str::make('path')
                 ->writable()
-                ->requiredOnCreate(),
+                ->requiredOnCreate()
+                ->rules(['filled']),
         ];
     }
 
@@ -118,7 +133,7 @@ class EmojiResource extends AbstractDatabaseResource
     }
 
     /**
-     * Trim and validate attributes before save.
+     * Trim attributes before save.
      */
     public function saving(object $model, BaseContext $context): ?object
     {
@@ -128,51 +143,15 @@ class EmojiResource extends AbstractDatabaseResource
 
         if ($model->isDirty('category')) {
             $category = trim((string) $model->category);
-
-            $err = EmojiRules::validateCategory($category);
-            if ($err !== null) {
-                throw new ValidationException(['category' => $err]);
-            }
-
             $model->category = $category !== '' ? $category : null;
         }
 
         if ($model->isDirty('text_to_replace')) {
-            $value = trim((string) $model->text_to_replace);
-            $model->text_to_replace = $value;
-
-            $err = EmojiRules::validateTextToReplace($value, true);
-            if ($err !== null) {
-                throw new ValidationException(['text_to_replace' => $err]);
-            }
-
-            // Enforce the canonical shortcode format for new or changed
-            // triggers. The isDirty() guard grandfathers existing rows:
-            // editing a legacy emoji's other fields leaves its trigger
-            // untouched (not dirty) and so skips this check; only creating
-            // or actually changing the trigger requires the new format.
-            $err = EmojiRules::validateCanonicalShortcode($value);
-            if ($err !== null) {
-                throw new ValidationException(['text_to_replace' => $err]);
-            }
-
-            // Check for duplicate trigger text
-            $existing = Emoji::where('text_to_replace', $value)
-                ->where('id', '!=', $model->id ?? 0)
-                ->first();
-            if ($existing) {
-                throw new ValidationException(['text_to_replace' => 'This shortcode is already used by another emoji.']);
-            }
+            $model->text_to_replace = trim((string) $model->text_to_replace);
         }
 
         if ($model->isDirty('path')) {
-            $value = trim((string) $model->path);
-            $model->path = $value;
-
-            $err = EmojiRules::validatePath($value, true);
-            if ($err !== null) {
-                throw new ValidationException(['path' => $err]);
-            }
+            $model->path = trim((string) $model->path);
         }
 
         return $model;
