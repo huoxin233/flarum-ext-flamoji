@@ -169,7 +169,8 @@ class EmojiResource extends AbstractDatabaseResource
      */
     private function handleImport(array $data): array
     {
-        // Legacy JSON might use `textToReplace` instead of `text_to_replace`.
+        // @todo next major release: Remove this fallback once we no longer support importing JSON exports from Flamoji 1.x
+        // Legacy JSON exports might use `textToReplace` instead of `text_to_replace`.
         $data = array_map(function ($row) {
             if (is_array($row) && isset($row['textToReplace'])) {
                 $row['text_to_replace'] = $row['textToReplace'];
@@ -184,6 +185,7 @@ class EmojiResource extends AbstractDatabaseResource
             'data.*.text_to_replace' => [
                 'required',
                 'string',
+                // @todo next major release: Remove this permissiveness and strictly enforce 'regex:/^:[a-zA-Z0-9_+-]+:$/'
                 'regex:/^\S+$/', // No whitespace (legacy floor)
                 'distinct',
                 'unique:custom_emojis,text_to_replace'
@@ -213,6 +215,7 @@ class EmojiResource extends AbstractDatabaseResource
                 $path = trim((string) ($row['path'] ?? ''));
                 $category = trim((string) ($row['category'] ?? ''));
 
+                // @todo next major release: Remove this legacy tracking once strict regex validation is enforced above
                 if (!preg_match('/^:[a-zA-Z0-9_+-]+:$/', $textToReplace)) {
                     $legacyShortcodes[] = $textToReplace;
                 }
