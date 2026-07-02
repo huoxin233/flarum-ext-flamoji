@@ -142,3 +142,8 @@ pianotell-flamoji:
       symbols: Symbols
       flags: Flags
       custom: Custom
+
+  validation:
+    custom:
+      text_to_replace:
+        regex: "The shortcode must be wrapped in colons and contain only letters, numbers, dashes, underscores or plus signs — e.g. :myemoji_party:."

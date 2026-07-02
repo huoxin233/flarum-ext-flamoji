@@ -99,18 +99,12 @@ class EmojiResource extends AbstractDatabaseResource
             Schema\Str::make('text_to_replace')
                 ->writable()
                 ->requiredOnCreate()
-                ->rules(['regex:/^:[a-zA-Z0-9_+-]+:$/'], true)
-                ->messages([
-                    'regex' => 'The shortcode must be wrapped in colons and contain only letters, numbers, dashes, underscores or plus signs — e.g. :myemoji_party:.'
-                ]),
+                ->rules(['regex:/^:[a-zA-Z0-9_+-]+:$/'], true),
 
             Schema\Str::make('category')
                 ->writable()
                 ->nullable()
-                ->rules(['max:255'], true)
-                ->messages([
-                    'max' => 'The category must not be longer than 255 characters.'
-                ]),
+                ->rules(['max:255'], true),
 
             Schema\Str::make('path')
                 ->writable()
